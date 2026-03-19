@@ -1269,7 +1269,29 @@ def game_loop(args):
         client = carla.Client(args.host, args.port)
         client.set_timeout(2000.0)
 
-        sim_world = client.get_world()
+        if args.xodr_path:
+            xodr_path = os.path.abspath(args.xodr_path)
+            if not os.path.exists(xodr_path):
+                print('ERROR: xodr file not found: %s' % xodr_path)
+                sys.exit(1)
+            with open(xodr_path, encoding='utf-8') as f:
+                xodr_content = f.read()
+            params = carla.OpendriveGenerationParameters(
+                vertex_distance=2.0,
+                max_road_length=500.0,
+                wall_height=0.0,
+                additional_width=0.8,
+                smooth_junctions=True,
+                enable_mesh_visibility=True,
+            )
+            print('Loading OpenDRIVE map: %s' % xodr_path)
+            sim_world = client.generate_opendrive_world(xodr_content, params)
+        elif args.map:
+            print('Loading map: %s' % args.map)
+            client.load_world(args.map)
+            sim_world = client.get_world()
+        else:
+            sim_world = client.get_world()
         traffic_manager = client.get_trafficmanager()
         if args.sync:
             original_settings = sim_world.get_settings()
@@ -1362,6 +1384,12 @@ def main():
     argparser.add_argument(
         '--sync', action='store_true',
         help='Activate synchronous mode execution')
+    argparser.add_argument(
+        '--map', metavar='NAME', default=None,
+        help='load a specific CARLA town map (e.g. Town01, Town05)')
+    argparser.add_argument(
+        '-x', '--xodr-path', metavar='PATH', default=None,
+        help='path to an OpenDRIVE (.xodr) file to generate the map from')
     args = argparser.parse_args()
 
     args.width, args.height = [int(x) for x in args.res.split('x')]
