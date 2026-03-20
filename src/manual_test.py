@@ -138,7 +138,6 @@ def find_weather_presets():
     presets = [x for x in dir(carla.WeatherParameters) if re.match('[A-Z].+', x)]
     return [(getattr(carla.WeatherParameters, x), name(x)) for x in presets]
 
-
 def get_actor_display_name(actor, truncate=250):
     name = ' '.join(actor.type_id.replace('_', '.').title().split('.')[1:])
     return (name[:truncate - 1] + u'\u2026') if len(name) > truncate else name
@@ -195,7 +194,7 @@ class World(object):
         self.camera_manager = None
         self._weather_presets = find_weather_presets()
         self._weather_index = 0
-        self._actor_filter = args.vehicle if args.vehicle else args.filter
+        self._actor_filter = args.filter
         self._actor_generation = args.generation
         self._gamma = args.gamma
         self.restart()
@@ -206,6 +205,7 @@ class World(object):
         self.show_vehicle_telemetry = False
         self.doors_are_open = False
         self.current_map_layer = 0
+        self.spawn_points = self.map.get_spawn_points()
         self.map_layer_names = [
             carla.MapLayer.NONE,
             carla.MapLayer.Buildings,
@@ -231,6 +231,7 @@ class World(object):
         if not blueprint_list:
             raise ValueError("Couldn't find any blueprints with the specified filters")
         blueprint = random.choice(blueprint_list)
+        blueprint = self.world.get_blueprint_library().find('vehicle.lincoln.mkz_2020')
         blueprint.set_attribute('role_name', self.actor_role_name)
         if blueprint.has_attribute('terramechanics'):
             blueprint.set_attribute('terramechanics', 'true')
@@ -263,7 +264,7 @@ class World(object):
                 print('Please add some Vehicle Spawn Point to your UE4 scene.')
                 sys.exit(1)
             spawn_points = self.map.get_spawn_points()
-            spawn_point = random.choice(spawn_points) if spawn_points else carla.Transform()
+            spawn_point = spawn_points[1] if spawn_points else carla.Transform()
             self.player = self.world.try_spawn_actor(blueprint, spawn_point)
             self.show_vehicle_telemetry = False
             self.modify_vehicle_physics(self.player)
@@ -357,7 +358,7 @@ class World(object):
 
 class KeyboardControl(object):
     """Class that handles keyboard input."""
-    def __init__(self, world, start_in_autopilot):
+    def __init__(self, world, traffic_manager, start_in_autopilot=True):
         self._autopilot_enabled = start_in_autopilot
         self._ackermann_enabled = False
         self._ackermann_reverse = 1
@@ -366,6 +367,8 @@ class KeyboardControl(object):
             self._ackermann_control = carla.VehicleAckermannControl()
             self._lights = carla.VehicleLightState.NONE
             world.player.set_autopilot(self._autopilot_enabled)
+            traffic_manager.ignore_lights_percentage(world.player, 100)
+            traffic_manager.set_desired_speed(world.player, 120)
             world.player.set_light_state(self._lights)
         elif isinstance(world.player, carla.Walker):
             self._control = carla.WalkerControl()
@@ -1228,23 +1231,37 @@ def game_loop(args):
 
     try:
         client = carla.Client(args.host, args.port)
+        client.load_world('Town04')
         client.set_timeout(2000.0)
 
         sim_world = client.get_world()
+        # Get the world spectator
+        spectator = sim_world.get_spectator()
+        traffic_manager = client.get_trafficmanager()
         if args.sync:
             original_settings = sim_world.get_settings()
             settings = sim_world.get_settings()
             if not settings.synchronous_mode:
                 settings.synchronous_mode = True
-                settings.fixed_delta_seconds = 0.05
+                settings.fixed_delta_seconds = 0.01
             sim_world.apply_settings(settings)
-
-            traffic_manager = client.get_trafficmanager()
             traffic_manager.set_synchronous_mode(True)
 
         if args.autopilot and not sim_world.get_settings().synchronous_mode:
             print("WARNING: You are currently in asynchronous mode and could "
                   "experience some issues with the traffic simulation")
+            
+        for i, sp in enumerate(sim_world.get_map().get_spawn_points()):
+            loc = sp.location + carla.Location(z=0.5)
+
+            sim_world.debug.draw_string(
+                loc,
+                str(i),     
+                draw_shadow=False,
+                color=carla.Color(255, 255, 0),
+                life_time=600.0,   
+                persistent_lines=True
+            )
 
         display = pygame.display.set_mode(
             (args.width, args.height),
@@ -1254,7 +1271,7 @@ def game_loop(args):
 
         hud = HUD(args.width, args.height)
         world = World(sim_world, hud, args)
-        controller = KeyboardControl(world, args.autopilot)
+        controller = KeyboardControl(world, traffic_manager, args.autopilot)
 
         if args.sync:
             sim_world.tick()
@@ -1268,7 +1285,9 @@ def game_loop(args):
             clock.tick_busy_loop(60)
             if controller.parse_events(client, world, clock, args.sync):
                 return
-            world.tick(clock)
+            transform = carla.Transform(world.player.get_transform().transform(carla.Location(x=-3,z=20)),carla.Rotation(pitch=-80, yaw=world.player.get_transform().rotation.yaw))
+            spectator.set_transform(transform) 
+            world.tick(clock) # hud update
             world.render(display)
             pygame.display.flip()
 
@@ -1295,11 +1314,6 @@ def main():
     argparser = argparse.ArgumentParser(
         description='CARLA Manual Control Client')
     argparser.add_argument(
-        '--vehicle',
-        metavar='MODEL',
-        default='vehicle.tesla.model3',
-        help='specify vehicle model (e.g. vehicle.tesla.model3, vehicle.audi.tt)')
-    argparser.add_argument(
         '-v', '--verbose',
         action='store_true',
         dest='debug',
@@ -1318,6 +1332,7 @@ def main():
     argparser.add_argument(
         '-a', '--autopilot',
         action='store_true',
+        default=True,
         help='enable autopilot')
     argparser.add_argument(
         '--res',
@@ -1347,6 +1362,7 @@ def main():
     argparser.add_argument(
         '--sync',
         action='store_true',
+        default=True,
         help='Activate synchronous mode execution')
     args = argparser.parse_args()
 
