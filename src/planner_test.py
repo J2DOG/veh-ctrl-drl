@@ -74,8 +74,11 @@ import os
 import random
 import re
 import sys
+import os
+ 
+# Add the carla agents module to the Python path
+sys.path.append(os.path.join(os.path.dirname(__file__), 'utils', 'carla'))
 import weakref
-
 try:
     import pygame
     from pygame.locals import KMOD_CTRL
@@ -201,21 +204,12 @@ def draw_global_route_debug(carla_world, agent, world, z_lift=0.65):
         loc = wp.transform.location
         locs.append(carla.Location(loc.x, loc.y, loc.z + z_lift))
 
-    for i in range(len(locs) - 1):
-        dbg.draw_line(
-            locs[i], locs[i + 1],
-            thickness=0.22,
-            color=red,
-            life_time=0.0,
-            persistent_lines=True)
-
     for p in locs:
         dbg.draw_point(
             p,
-            size=0.42,
+            size=0.1,
             color=red,
-            life_time=0.0,
-            persistent_lines=True)
+            life_time=0.0)
 
     world._global_route_debug_drawn_revision = rev
 
@@ -1305,7 +1299,7 @@ def game_loop(args):
             sim_world.apply_settings(settings)
             traffic_manager.set_synchronous_mode(True)
 
-        if args.autopilot and not sim_world.get_settings().synchronous_mode:
+        if not sim_world.get_settings().synchronous_mode:
             print("WARNING: You are currently in asynchronous mode and could "
                   "experience some issues with the traffic simulation")
             
@@ -1331,7 +1325,7 @@ def game_loop(args):
         world = World(sim_world, hud, args)
         
         if args.mode == "manual" or args.mode == "autopilot":
-            controller = KeyboardControl(world, traffic_manager, args.autopilot)
+            controller = KeyboardControl(world, traffic_manager, args.mode == "autopilot")
             world.planner_agent = None
         elif args.mode == "agent":
             spawn_points = world.map.get_spawn_points()
@@ -1407,8 +1401,8 @@ def main():
     argparser.add_argument(
         '--mode',
         choices=["manual", "autopilot", "agent"],
-        default="autopilot",
-        help='Mode of operation (default: autopilot)')
+        default="agent",
+        help='Mode of operation (default: agent)')
     argparser.add_argument(
         '-v', '--verbose',
         action='store_true',
@@ -1425,10 +1419,6 @@ def main():
         default=2000,
         type=int,
         help='TCP port to listen to (default: 2000)')
-    argparser.add_argument(
-        '-a', '--autopilot',
-        action='store_true',
-        help='enable autopilot')
     argparser.add_argument(
         '--res',
         metavar='WIDTHxHEIGHT',
