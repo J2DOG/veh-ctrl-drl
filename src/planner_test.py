@@ -130,11 +130,9 @@ try:
 except ImportError:
     raise RuntimeError('cannot import numpy, make sure numpy package is installed')
 
-from agents.navigation.behavior_agent import BehaviorAgent  # pylint: disable=import-error
-from agents.navigation.basic_agent import BasicAgent  # pylint: disable=import-error
-from agents.navigation.constant_velocity_agent import ConstantVelocityAgent  # pylint: disable=import-error
-
-
+from utils.carla.agents.navigation.behavior_agent import BehaviorAgent
+from utils.carla.agents.navigation.basic_agent import BasicAgent
+from utils.carla.agents.navigation.constant_velocity_agent import ConstantVelocityAgent
 # ==============================================================================
 # -- Global functions ----------------------------------------------------------
 # ==============================================================================
@@ -903,14 +901,17 @@ class Marker(object):
         _ = world.player.get_control()
 
         self.local_plan_nearest_eight = []
-        agent = getattr(self.world, 'planner_agent', None)
+        agent = getattr(world, 'planner_agent', None)
         if agent is None:
+            print(f"[Marker] (tick): No planner agent found")
             return
         try:
             plan = list(agent.get_local_planner().get_plan())
         except Exception:
+            print(f"[Marker] (tick): Failed to get local plan")
             return
         if not plan:
+            print(f"[Marker] (tick): No plan found")
             return
 
         ego_loc = world.player.get_location()
