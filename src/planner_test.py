@@ -78,6 +78,7 @@ import os
  
 # Add the carla agents module to the Python path
 sys.path.append(os.path.join(os.path.dirname(__file__), 'utils', 'carla'))
+
 import weakref
 try:
     import pygame
@@ -333,9 +334,7 @@ class World(object):
 
     def tick(self, clock):
         self.hud.tick(self, clock)
-        if self.planner_agent is not None:
-            # Todo: draw debug info 
-            pass
+
 
     def render(self, display):
         self.camera_manager.render(display)
@@ -877,8 +876,12 @@ class HelpText(object):
 
 class Marker(object):
     def __init__(self, sim_world):
-        self.life_time = sim_world.get_settings().fixed_delta_seconds
+        # CARLA DebugHelper: life_time is seconds; -1 ≈ one frame; 0 = permanent.
+        # Async mode has fixed_delta_seconds=None — must not pass None.
+        fd = sim_world.get_settings().fixed_delta_seconds
+        self.life_time = float(fd) * 1.0 if fd is not None else 0.1
         self.world = sim_world
+        self.local_plan_nearest_eight = []
         self.colors = {
             'red': carla.Color(255, 0, 0),
             'green': carla.Color(0, 255, 0),
@@ -890,6 +893,36 @@ class Marker(object):
             'orange': carla.Color(255, 165, 0),
             'purple': carla.Color(128, 0, 128)
         }
+
+    def tick(self, world):
+        """
+        Update the marker with the latest world state.
+        """
+        _ = world.player.get_transform()
+        _ = world.player.get_velocity()
+        _ = world.player.get_control()
+
+        self.local_plan_nearest_eight = []
+        agent = getattr(world, 'planner_agent', None)
+        if agent is None:
+            return
+        try:
+            plan = list(agent.get_local_planner().get_plan())
+        except Exception:
+            return
+        if not plan:
+            return
+
+        ego_loc = world.player.get_location()
+        nearest_idx = min(
+            range(len(plan)),
+            key=lambda i: ego_loc.distance(plan[i][0].transform.location))
+        self.local_plan_nearest_eight = plan[nearest_idx:nearest_idx + 8]
+        waypoints = [wp_tuple[0] for wp_tuple in self.local_plan_nearest_eight]
+        self.draw_waypoints(waypoints, color_name='red', size=0.15)
+
+
+
     
     def draw_point(self, location, color_name='red', size=0.1):
         """
@@ -906,20 +939,15 @@ class Marker(object):
             size=size,
             color=color,
             life_time=self.life_time,
-            persistent_lines=False
-        )
+            persistent_lines=False)
     
     def draw_waypoints(self, waypoints, color_name='green', size=0.15):
         """
-        Draw a list of waypoints.
-        
-        Args:
-            waypoints: List of carla.Location
-            color_name: Name of the color
-            size: Size of each waypoint point
+        Draw points for each element (carla.Waypoint or carla.Location).
         """
         for wp in waypoints:
-            self.draw_point(wp, color_name, size)
+            loc = wp.transform.location if hasattr(wp, 'transform') else wp
+            self.draw_point(loc, color_name, size)
 
 
 # ==============================================================================
@@ -1381,16 +1409,14 @@ def game_loop(args):
                 world.player.apply_control(control)
             if args.sync:
                 sim_world.tick()
+            else:
+                sim_world.wait_for_tick()
             clock.tick_busy_loop(60)
-            # Get the states
-            ## get the hero car states (location, velocity, acceleration, steering, brake, gear, speed_limit)
-            ## get the nearst n way points
-            
-
             # Monitor update
             transform = carla.Transform(world.player.get_transform().transform(carla.Location(x=-3,z=20)),carla.Rotation(pitch=-80, yaw=world.player.get_transform().rotation.yaw))
             spectator.set_transform(transform) 
             world.tick(clock) # HUD update
+            marker.tick(world)
             world.render(display)
             pygame.display.flip()
 
