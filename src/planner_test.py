@@ -173,47 +173,6 @@ def get_actor_blueprints(world, filter, generation):
         print("   Warning! Actor Generation is not valid. No actor will be spawned.")
         return []
 
-
-def draw_global_route_debug(carla_world, agent, world, z_lift=0.65):
-    """
-    Draw the full global route (all GlobalRoutePlanner trace waypoints on
-    BasicAgent._last_global_route) once per plan update. Large red, CARLA
-    permanent debug (life_time=0). Replan / new revision draws again.
-    """
-    if agent is None or world is None:
-        return
-
-    agent_id = id(agent)
-    if getattr(world, '_global_route_debug_agent_id', None) != agent_id:
-        world._global_route_debug_agent_id = agent_id
-        world._global_route_debug_drawn_revision = -1
-
-    rev = getattr(agent, '_global_route_revision', 0)
-    if getattr(world, '_global_route_debug_drawn_revision', -1) == rev:
-        return
-
-    route = getattr(agent, '_last_global_route', None)
-    if not route:
-        world._global_route_debug_drawn_revision = rev
-        return
-
-    dbg = carla_world.debug
-    red = carla.Color(255, 0, 0)
-    locs = []
-    for wp, _ in route:
-        loc = wp.transform.location
-        locs.append(carla.Location(loc.x, loc.y, loc.z + z_lift))
-
-    for p in locs:
-        dbg.draw_point(
-            p,
-            size=0.1,
-            color=red,
-            life_time=0.0)
-
-    world._global_route_debug_drawn_revision = rev
-
-
 # ==============================================================================
 # -- World ---------------------------------------------------------------------
 # ==============================================================================
@@ -375,7 +334,8 @@ class World(object):
     def tick(self, clock):
         self.hud.tick(self, clock)
         if self.planner_agent is not None:
-            draw_global_route_debug(self.world, self.planner_agent, self)
+            # Todo: draw debug info 
+            pass
 
     def render(self, display):
         self.camera_manager.render(display)
@@ -911,6 +871,58 @@ class HelpText(object):
 
 
 # ==============================================================================
+# -- Marker ------------------------------------------------------------------
+# ==============================================================================
+
+
+class Marker(object):
+    def __init__(self, sim_world):
+        self.life_time = sim_world.get_settings().fixed_delta_seconds
+        self.world = sim_world
+        self.colors = {
+            'red': carla.Color(255, 0, 0),
+            'green': carla.Color(0, 255, 0),
+            'blue': carla.Color(0, 0, 255),
+            'yellow': carla.Color(255, 255, 0),
+            'cyan': carla.Color(0, 255, 255),
+            'magenta': carla.Color(255, 0, 255),
+            'white': carla.Color(255, 255, 255),
+            'orange': carla.Color(255, 165, 0),
+            'purple': carla.Color(128, 0, 128)
+        }
+    
+    def draw_point(self, location, color_name='red', size=0.1):
+        """
+        Draw a point at the specified location.
+        
+        Args:
+            location: carla.Location where to draw the point
+            color_name: Name of the color (from self.colors)
+            size: Size of the point
+        """
+        color = self.colors.get(color_name, self.colors['red'])
+        self.world.debug.draw_point(
+            location,
+            size=size,
+            color=color,
+            life_time=self.life_time,
+            persistent_lines=False
+        )
+    
+    def draw_waypoints(self, waypoints, color_name='green', size=0.15):
+        """
+        Draw a list of waypoints.
+        
+        Args:
+            waypoints: List of carla.Location
+            color_name: Name of the color
+            size: Size of each waypoint point
+        """
+        for wp in waypoints:
+            self.draw_point(wp, color_name, size)
+
+
+# ==============================================================================
 # -- CollisionSensor -----------------------------------------------------------
 # ==============================================================================
 
@@ -1323,6 +1335,7 @@ def game_loop(args):
 
         hud = HUD(args.width, args.height)
         world = World(sim_world, hud, args)
+        marker = Marker(sim_world)
         
         if args.mode == "manual" or args.mode == "autopilot":
             controller = KeyboardControl(world, traffic_manager, args.mode == "autopilot")
@@ -1356,9 +1369,6 @@ def game_loop(args):
 
         clock = pygame.time.Clock()
         while True:
-            if args.sync:
-                sim_world.tick()
-            clock.tick_busy_loop(60)
             if (args.mode == "manual" or args.mode == "autopilot") and controller.parse_events(client, world, clock, args.sync):
                 return
             if args.mode == "agent" and agent is not None:
@@ -1369,7 +1379,15 @@ def game_loop(args):
                 control = agent.run_step()
                 control.manual_gear_shift = False
                 world.player.apply_control(control)
-            # Server monitor update
+            if args.sync:
+                sim_world.tick()
+            clock.tick_busy_loop(60)
+            # Get the states
+            ## get the hero car states (location, velocity, acceleration, steering, brake, gear, speed_limit)
+            ## get the nearst n way points
+            
+
+            # Monitor update
             transform = carla.Transform(world.player.get_transform().transform(carla.Location(x=-3,z=20)),carla.Rotation(pitch=-80, yaw=world.player.get_transform().rotation.yaw))
             spectator.set_transform(transform) 
             world.tick(clock) # HUD update
