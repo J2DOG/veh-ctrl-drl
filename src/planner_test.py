@@ -875,12 +875,12 @@ class HelpText(object):
 
 
 class Marker(object):
-    def __init__(self, sim_world):
+    def __init__(self, world):
         # CARLA DebugHelper: life_time is seconds; -1 ≈ one frame; 0 = permanent.
         # Async mode has fixed_delta_seconds=None — must not pass None.
-        fd = sim_world.get_settings().fixed_delta_seconds
+        self.world = world
+        fd = self.world.get_settings().fixed_delta_seconds
         self.life_time = float(fd) * 1.0 if fd is not None else 0.1
-        self.world = sim_world
         self.local_plan_nearest_eight = []
         self.colors = {
             'red': carla.Color(255, 0, 0),
@@ -903,7 +903,7 @@ class Marker(object):
         _ = world.player.get_control()
 
         self.local_plan_nearest_eight = []
-        agent = getattr(world, 'planner_agent', None)
+        agent = getattr(self.world, 'planner_agent', None)
         if agent is None:
             return
         try:
@@ -938,7 +938,7 @@ class Marker(object):
             location,
             size=size,
             color=color,
-            life_time=self.life_time,
+            life_time=1.0,
             persistent_lines=False)
     
     def draw_waypoints(self, waypoints, color_name='green', size=0.15):
@@ -1343,17 +1343,17 @@ def game_loop(args):
             print("WARNING: You are currently in asynchronous mode and could "
                   "experience some issues with the traffic simulation")
             
-        for i, sp in enumerate(sim_world.get_map().get_spawn_points()):
-            loc = sp.location + carla.Location(z=0.5)
+        # for i, sp in enumerate(sim_world.get_map().get_spawn_points()):
+        #     loc = sp.location + carla.Location(z=0.5)
 
-            sim_world.debug.draw_string(
-                loc,
-                str(i),     
-                draw_shadow=False,
-                color=carla.Color(255, 255, 0),
-                life_time=600.0,   
-                persistent_lines=True
-            )
+        #     sim_world.debug.draw_string(
+        #         loc,
+        #         str(i),     
+        #         draw_shadow=False,
+        #         color=carla.Color(255, 255, 0),
+        #         life_time=600.0,   
+        #         persistent_lines=True
+        #     )
 
         display = pygame.display.set_mode(
             (args.width, args.height),
