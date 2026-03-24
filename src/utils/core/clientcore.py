@@ -780,9 +780,9 @@ class Marker(object):
         """
         Update the marker with the latest world state.
         """
-        _ = world.player.get_transform()
-        _ = world.player.get_velocity()
-        _ = world.player.get_control()
+        # _ = world.player.get_transform()
+        # _ = world.player.get_velocity()
+        # _ = world.player.get_control()
 
         self.local_plan_nearest_eight = []
         agent = getattr(world, 'planner_agent', None)
@@ -794,8 +794,8 @@ class Marker(object):
         except Exception:
             print(f"[Marker] (tick): Failed to get local plan")
             return
-        if not plan:
-            print(f"[Marker] (tick): No plan found")
+        if  len(plan) < 8:
+            print(f"[Marker] (tick): No enough plan found")
             return
 
         ego_loc = world.player.get_location()
@@ -804,7 +804,7 @@ class Marker(object):
             key=lambda i: ego_loc.distance(plan[i][0].transform.location))
         self.local_plan_nearest_eight = plan[nearest_idx:nearest_idx + 8]
         waypoints = [wp_tuple[0] for wp_tuple in self.local_plan_nearest_eight]
-        self.draw_waypoints(waypoints, color_name='red', size=0.15)
+        self.draw_waypoints(waypoints, color_name='red', size=0.1)
 
 
 
@@ -826,7 +826,7 @@ class Marker(object):
             life_time=1.0,
             persistent_lines=False)
     
-    def draw_waypoints(self, waypoints, color_name='green', size=0.15):
+    def draw_waypoints(self, waypoints, color_name='green', size=0.1):
         """
         Draw points for each element (carla.Waypoint or carla.Location).
         """
