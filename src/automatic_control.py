@@ -46,9 +46,9 @@ except IndexError:
 import carla
 from carla import ColorConverter as cc
 
-from agents.navigation.behavior_agent import BehaviorAgent  # pylint: disable=import-error
-from agents.navigation.basic_agent import BasicAgent  # pylint: disable=import-error
-from agents.navigation.constant_velocity_agent import ConstantVelocityAgent  # pylint: disable=import-error
+from utils.carla.agents.navigation.behavior_agent import BehaviorAgent  # pylint: disable=import-error
+from utils.carla.agents.navigation.basic_agent import BasicAgent  # pylint: disable=import-error
+from utils.carla.agents.navigation.constant_velocity_agent import ConstantVelocityAgent  # pylint: disable=import-error
 
 
 # ==============================================================================

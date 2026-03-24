@@ -2,13 +2,10 @@
 
 from __future__ import print_function
 import carla
-import argparse
 import datetime
-import logging
 import math
 import os
 import random
-import re
 import sys
 import os
 
@@ -58,7 +55,7 @@ except ImportError:
     raise RuntimeError('cannot import pygame, make sure pygame package is installed')
 
 from common.common import find_weather_presets, get_actor_blueprints, get_actor_display_name
-from utils.sensors.sensors import sensors
+import utils.sensors.sensors as sensors
 # ==============================================================================
 # -- World ---------------------------------------------------------------------
 # ==============================================================================
@@ -732,7 +729,7 @@ class FadingText(object):
 class HelpText(object):
     """Helper class to handle text output using pygame"""
     def __init__(self, font, width, height):
-        lines = __doc__.split('\n')
+        lines = (__doc__ or "").split('\n')
         self.font = font
         self.line_space = 18
         self.dim = (780, len(lines) * self.line_space + 12)

@@ -13,7 +13,7 @@ import numpy as np
 import networkx as nx
 
 import carla
-from agents.navigation.local_planner import RoadOption
+from utils.carla.agents.navigation.local_planner import RoadOption
 
 # Python 2 compatibility
 TYPE_CHECKING = False
